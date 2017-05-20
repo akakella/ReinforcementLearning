@@ -3,9 +3,9 @@ import numpy as np
 import math
 from collections import defaultdict
 
-class QLearningAgent():
+class SarsaAgent():
 	"""
-	Creates a learning agent using tabular Q-Learning
+	Creates a learning agent using the SARSA algorithm
 	
 	Args:
 		action_space: list of available actions for the agent
@@ -107,15 +107,16 @@ class QLearningAgent():
 			epsilon = max(self.agent_params["epsilon_min"], min(1, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 			alpha = max(self.agent_params["alpha_min"], min(0.5, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 
+			action = self.act(obs, epsilon)
 			for t in range(self.agent_params["iter"]):
-				action = self.act(obs, epsilon)
 				next_obs, reward, done, info = self.env.step(action)
 				next_obs = self.convertToObsSpace(next_obs)
 
-				future = np.max(self.qtable[next_obs])
+				next_act = self.act(next_obs, epsilon)
 
-				self.qtable[obs][action] = self.qtable[obs][action] + alpha*(reward + self.agent_params["discount"]*future - self.qtable[obs][action])
+				self.qtable[obs][action] = self.qtable[obs][action] + alpha*(reward + self.agent_params["discount"]*self.qtable[next_obs][next_act] - self.qtable[obs][action])
 				obs = next_obs
+				action = next_act
 				totalReward += reward
 
 				if done:
