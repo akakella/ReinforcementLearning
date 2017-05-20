@@ -1,5 +1,6 @@
 import gym
 import numpy as np
+import math
 from collections import defaultdict
 
 class QLearningAgent():
@@ -14,29 +15,29 @@ class QLearningAgent():
 		agent_params: array of agent parameters detailed below
 			mean: initial mean reward value for each state-action pair
 			std: standard deviation for initial mean reward value for each state-action pair
-			learning_rate: scale factor for incorporating new information
-			eps: probability to select a random action
+			alpha_min: minimum learning rate
+			epsilon_min: minimum probability to select a random action
+			decay_rate: decay rate for logarithmic decay of epsilon and alpha
 			discount: scale factor for discounting future state rewards
 			iter: maximum number of iterations per episode
 	"""
 	
-	def __init__(self, action_space, obs_min, obs_max, num_bins, **agent_params):
+	def __init__(self, env, action_space, obs_min, obs_max, num_bins, **agent_params):
 		self.action_space = action_space
 		self.n_actions = np.size(action_space)
-		self.obs_bins = []
+		self.obs_min = obs_min
+		self.obs_max = obs_max
 		self.num_bins = num_bins
-
-		for i, item in enumerate(obs_min):
-			bin = np.arange(obs_min[i], obs_max[i], (float(obs_max[i]) - float(obs_min[i]))/(self.num_bins-1))
-			self.obs_bins.append(bin)
+		self.env = env
 		
 		self.agent_params = {
 			"mean" : 0,
 			"std" : 0,
-			"learning_rate" : 0.1,
-			"eps" : 0.02,
-			"discount" : 0.95,
-			"iter" : 1000
+			"alpha_min" : 0.1,
+			"epsilon_min" : 0.01,
+			"decay_rate" : 0.04,
+			"discount" : 0.99,
+			"iter" : 250
 		}
 
 		self.agent_params.update(agent_params)
@@ -44,58 +45,80 @@ class QLearningAgent():
 
 	def convertToObsSpace(self, observation):
 		"""
-		Converts observation array to scalar value for easier indexing in the value table
+		Converts true observation to binned observation
 		
 		Args:
 			observation: observation array returned from the environment
 			
 		Returns:
-			obs: scalar value corresponding to the input observation
+			indices: tuple of indices for bins the observation corresponds to
 		"""
-		obs = 0
-		
-		for i, item in enumerate(observation.flatten()):
-			obs = obs + np.digitize(item, self.obs_bins[i]) * pow(pow(10, np.ceil(np.log10(self.num_bins))), i)
-			
-		return obs
+		indices = []
 
-	def act(self, observation):
+		for i in range(len(observation)):
+			if observation[i] <= self.obs_min[i]:
+				idx = 0
+			elif observation[i] >= self.obs_max[i]:
+				idx = self.num_bins[i] - 1
+			else:
+				offset = (self.num_bins[i]-1)*self.obs_min[i]/(self.obs_max[i] - self.obs_min[i])
+				scale = (self.num_bins[i]-1)/(self.obs_max[i] - self.obs_min[i]) 
+				idx = int(round(scale*observation[i] - offset))
+			indices.append(idx)
+		return tuple(indices)
+
+	def act(self, observation, epsilon):
 		"""
 		Chooses action based on a given observation
 		
 		Args:
 			observation: observation returned from the environment (post-scalar conversion)
+			epsilon: epsilon to use for epsilon-greedy algorithm
 			
 		Returns:
 			action: action based on epsilon-greedy algorithm
 		"""
-		if (np.random.random() > self.agent_params["eps"]):
+		if (np.random.random() > epsilon):
 			action = np.argmax(self.qtable[observation])
 		else:
-			action = np.random.choice(self.action_space)
+			action = self.env.action_space.sample()
 
 		return action
 
-	def train(self, env):
+	def train(self, episodes):
 		"""
 		Resets environment and runs each episode
 		
 		Args:
-			env: desired environment for agent to act on
+			episodes: number of episodes to train over
+
+		Returns:
+			maxReward: maximum reward obtained over this training
 			
 		"""
-		obs = env.reset()
-		obs = self.convertToObsSpace(obs)
+		maxReward = 0
+		totalReward = 0
+		for ep in range(episodes):
+			if (maxReward < totalReward):
+				maxReward = totalReward
+			totalReward = 0
 
-		for t in range(self.agent_params["iter"]):
-			action = self.act(obs)
-			next_obs, reward, done, info = env.step(action)
-			next_obs = self.convertToObsSpace(next_obs)
-			if done:
-				future = 0
-				break;
-			else:
+			obs = self.env.reset()
+			obs = self.convertToObsSpace(obs)
+			epsilon = max(self.agent_params["epsilon_min"], min(1, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
+			alpha = max(self.agent_params["alpha_min"], min(0.5, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
+
+			for t in range(self.agent_params["iter"]):
+				action = self.act(obs, epsilon)
+				next_obs, reward, done, info = self.env.step(action)
+				next_obs = self.convertToObsSpace(next_obs)
+
 				future = np.max(self.qtable[next_obs])
 
-			self.qtable[obs][action] = self.qtable[obs][action] + self.agent_params["learning_rate"] * (reward + self.agent_params["discount"]*future - self.qtable[obs][action])
-			obs = next_obs
+				self.qtable[obs][action] = self.qtable[obs][action] + alpha*(reward + self.agent_params["discount"]*future - self.qtable[obs][action])
+				obs = next_obs
+				totalReward += reward
+
+				if done:
+					break
+		return maxReward
