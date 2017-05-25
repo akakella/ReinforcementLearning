@@ -1,7 +1,9 @@
 import gym
-from TD.QLearningAgent import QLearningAgent
+import numpy as np
+from FunctionApproximation.semigradient_q_agent import semigradient_q_agent
 from gym import wrappers
 import math
+from matplotlib import pyplot as plt
 
 """
 Trains the cartpole-v0 environment from OpenAI's gym for a predefined number of episodes
@@ -13,18 +15,13 @@ def main(episodes):
 	env = gym.make('MountainCar-v0')
 	env = wrappers.Monitor(env, '../tmp/mountaincar-experiment', force=True)
 
-	n_actions = env.action_space.n
-	observation_min = env.observation_space.low
-	observation_max = env.observation_space.high
+	agent = semigradient_q_agent(env, decay_rate=3, epsilon_min=0, discount=1)
 
-	num_bins = (5, 5)
-
-	agent = QLearningAgent(env, n_actions, observation_min, observation_max, num_bins)
-
-	maxReward = agent.train(episodes)
-	print('Maximum reward obtained: ' + repr(maxReward))
+	rewards = agent.train(episodes)
+	print('Maximum reward obtained: ' + repr(max(rewards)))
+	print('Average reward obtained over last 100 episodes: ' + repr(np.mean(rewards[(episodes-100):])))
 	env.close()
 
 if __name__ == "__main__":
-	episodes = 800
+	episodes = 1000
 	main(episodes)

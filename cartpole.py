@@ -1,5 +1,5 @@
 import gym
-from TD.QLearningAgent import QLearningAgent
+from TD.qlearning_agent import qlearning_agent
 from gym import wrappers
 import math
 
@@ -21,10 +21,11 @@ def main(episodes):
 	observation_max[3] = 1
 	num_bins = (2,2,6,3)
 
-	agent = QLearningAgent(env, n_actions, observation_min, observation_max, num_bins)
+	agent = qlearning_agent(env, n_actions, observation_min, observation_max, num_bins)
 
 	maxReward = agent.train(episodes)
-	print('Maximum reward obtained: ' + repr(maxReward))
+	rewards = agent.train(episodes)
+	print('Maximum reward obtained: ' + repr(max(rewards)))
 	env.close()
 
 if __name__ == "__main__":

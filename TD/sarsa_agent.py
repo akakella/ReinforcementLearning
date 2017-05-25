@@ -2,8 +2,9 @@ import gym
 import numpy as np
 import math
 from collections import defaultdict
+from queue import LifoQueue
 
-class SarsaAgent():
+class sarsa_agent():
 	"""
 	Creates a learning agent using the SARSA algorithm
 	
@@ -42,7 +43,7 @@ class SarsaAgent():
 		self.agent_params.update(agent_params)
 		self.qtable = defaultdict(lambda: self.agent_params["std"] * np.random.randn(self.n_actions) + self.agent_params["mean"])
 
-	def convertToObsSpace(self, observation):
+	def discretize_state(self, observation):
 		"""
 		Converts true observation to binned observation
 		
@@ -86,39 +87,37 @@ class SarsaAgent():
 
 	def train(self, episodes):
 		"""
-		Resets environment and runs each episode
+		Runs the agent for a set number of episodes and updates the value table
 		
 		Args:
 			episodes: number of episodes to train over
 
 		Returns:
-			maxReward: maximum reward obtained over this training
+			rewards: array of rewards obtained by episode
 			
 		"""
-		maxReward = -float('inf')
-		totalReward = -float('inf')
+		
+		rewards = []
 		for ep in range(episodes):
-			if (maxReward < totalReward):
-				maxReward = totalReward
-			totalReward = 0
-
 			obs = self.env.reset()
-			obs = self.convertToObsSpace(obs)
+			obs = self.discretize_state(obs)
 			epsilon = max(self.agent_params["epsilon_min"], min(1, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 			alpha = max(self.agent_params["alpha_min"], min(0.5, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 
 			action = self.act(obs, epsilon)
+			epReward = 0
 			for t in range(self.agent_params["iter"]):
 				next_obs, reward, done, info = self.env.step(action)
-				next_obs = self.convertToObsSpace(next_obs)
+				next_obs = self.discretize_state(next_obs)
 
 				next_act = self.act(next_obs, epsilon)
 
 				self.qtable[obs][action] = self.qtable[obs][action] + alpha*(reward + self.agent_params["discount"]*self.qtable[next_obs][next_act] - self.qtable[obs][action])
 				obs = next_obs
 				action = next_act
-				totalReward += reward
+				epReward += reward
 
 				if done:
+					rewards.append(epReward)
 					break
-		return maxReward
+		return rewards
