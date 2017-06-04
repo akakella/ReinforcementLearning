@@ -2,10 +2,11 @@ import gym
 import numpy as np
 import math
 from collections import defaultdict
+from queue import LifoQueue
 
-class qlearning_agent():
+class sarsa_agent():
 	"""
-	Creates a learning agent using tabular Q-Learning
+	Creates a learning agent using the SARSA algorithm
 	
 	Args:
 		action_space: list of available actions for the agent
@@ -22,12 +23,13 @@ class qlearning_agent():
 			iter: maximum number of iterations per episode
 	"""
 	
-	def __init__(self, env, n_actions, obs_min, obs_max, num_bins, **agent_params):
-		self.n_actions = n_actions
-		self.obs_min = obs_min
-		self.obs_max = obs_max
-		self.num_bins = num_bins
+	def __init__(self, env, n_actions=None, obs_min=None, obs_max=None, num_bins=None, **agent_params):
 		self.env = env
+
+		self.n_actions = env.action_space.n if (n_actions == None) else n_actions
+		self.obs_min = env.observation_space.low if (obs_min == None) else obs_min
+		self.obs_max = env.observation_space.high if (obs_max == None) else obs_max
+		self.num_bins = [10] * env.observation_space.n if (num_bins == None) else num_bins
 		
 		self.agent_params = {
 			"mean" : 0,
@@ -103,16 +105,17 @@ class qlearning_agent():
 			epsilon = max(self.agent_params["epsilon_min"], min(1, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 			alpha = max(self.agent_params["alpha_min"], min(0.5, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 
+			action = self.act(obs, epsilon)
 			epReward = 0
 			for t in range(self.agent_params["iter"]):
-				action = self.act(obs, epsilon)
 				next_obs, reward, done, info = self.env.step(action)
 				next_obs = self.discretize_state(next_obs)
 
-				future = np.max(self.qtable[next_obs])
+				next_act = self.act(next_obs, epsilon)
 
-				self.qtable[obs][action] = self.qtable[obs][action] + alpha*(reward + self.agent_params["discount"]*future - self.qtable[obs][action])
+				self.qtable[obs][action] = self.qtable[obs][action] + alpha*(reward + self.agent_params["discount"]*self.qtable[next_obs][next_act] - self.qtable[obs][action])
 				obs = next_obs
+				action = next_act
 				epReward += reward
 
 				if done:
