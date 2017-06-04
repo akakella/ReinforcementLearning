@@ -8,8 +8,16 @@ from sklearn.kernel_approximation import RBFSampler
 
 class semigradient_sarsa_agent():
 	"""
-	Creates a learning agent using Semi-gradient SARSA for control. Currently only uses
-	linear function approximation
+	Creates a learning agent using Semi-gradient SARSA for control. Uses linear function approximation
+	with RBF kernels.
+
+	Args:
+		env: gym environment for the agent to act on
+		agent_params: 
+			epsilon_min: minimum allowed epsilon
+			decay_rate: decay rate for logarithmic decay of epsilon
+			discount: discount rate for future rewards
+			iter: maximum number of iterations per episode
 
 	"""
 
@@ -26,14 +34,14 @@ class semigradient_sarsa_agent():
 			("rbf1", RBFSampler(gamma=5.0, n_components=100)),
         	("rbf2", RBFSampler(gamma=2.0, n_components=100)),
         	("rbf3", RBFSampler(gamma=1.0, n_components=100)),
-        	("rbf3", RBFSampler(gamma=0.5, n_components=100))])
+        	("rbf4", RBFSampler(gamma=0.5, n_components=100))])
 		self.featurizer.fit(self.detrend.transform(observation_samples))
 
 		# Generate linear value function model for each action in our action space
 		self.models = []
 		initReward = np.array(0)
 		for k in range (env.action_space.n):
-			self.models.append(linear_model.SGDRegressor())
+			self.models.append(linear_model.SGDRegressor(learning_rate="constant"))
 			random_features = self.map_to_features(self.env.reset())
 			self.models[k].partial_fit(random_features.reshape(1,-1), initReward.ravel())
 

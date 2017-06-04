@@ -8,8 +8,16 @@ from sklearn.kernel_approximation import RBFSampler
 
 class semigradient_q_agent():
 	"""
-	Creates a learning agent using Semi-gradient Q-Learning for control. Currently only uses
-	linear function approximation
+	Creates a learning agent using Semi-gradient Q-Learning for control. Uses linear function
+	approximation with RBF kernels.
+
+	Args:
+		env: gym environment for the agent to act on
+		agent_params: 
+			epsilon_min: minimum allowed epsilon
+			decay_rate: decay rate for logarithmic decay of epsilon
+			discount: discount rate for future rewards
+			iter: maximum number of iterations per episode
 
 	"""
 
@@ -23,10 +31,10 @@ class semigradient_q_agent():
 
 		# Use detrended data to generate feature space with RBF kernels
 		self.featurizer = pipeline.FeatureUnion([
-			("rbf1", RBFSampler(gamma=6.0, n_components=50)),
-        	("rbf2", RBFSampler(gamma=5.0, n_components=50)),
-        	("rbf3", RBFSampler(gamma=4.0, n_components=50)),
-        	("rbf3", RBFSampler(gamma=0.5, n_components=50))])
+			("rbf1", RBFSampler(gamma=3.0, n_components=100)),
+        	("rbf2", RBFSampler(gamma=2.0, n_components=100)),
+        	("rbf3", RBFSampler(gamma=1.0, n_components=100)),
+        	("rbf4", RBFSampler(gamma=0.5, n_components=100))])
 		self.featurizer.fit(self.detrend.transform(observation_samples))
 
 		# Generate linear value function model for each action in our action space

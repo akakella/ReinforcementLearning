@@ -1,7 +1,9 @@
 import gym
 from TD.qlearning_agent import qlearning_agent
+from PolicyGradients.actor_critic_agent import actor_critic_agent
 from gym import wrappers
 import math
+import numpy as np
 
 """
 Trains the cartpole-v0 environment from OpenAI's gym for a predefined number of episodes
@@ -21,11 +23,11 @@ def main(episodes):
 	observation_max[3] = 1
 	num_bins = (2,2,6,3)
 
-	agent = qlearning_agent(env, n_actions, observation_min, observation_max, num_bins)
+	agent = actor_critic_agent(env)
 
-	maxReward = agent.train(episodes)
 	rewards = agent.train(episodes)
 	print('Maximum reward obtained: ' + repr(max(rewards)))
+	print('Average reward obtained over last 100 episodes: ' + repr(np.mean(rewards[(episodes-100):])))
 	env.close()
 
 if __name__ == "__main__":
