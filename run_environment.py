@@ -1,11 +1,11 @@
 import argparse
 import gym
 import numpy as np
-from TD.qlearning_agent import qlearning_agent
-from TD.sarsa_agent import sarsa_agent
-from FunctionApproximation.semigradient_q_agent import semigradient_q_agent
-from FunctionApproximation.semigradient_sarsa_agent import semigradient_sarsa_agent
-from PolicyGradients.actor_critic_agent import actor_critic_agent
+from temporal_difference.agents.qlearning_agent import qlearning_agent
+from temporal_difference.agents.sarsa_agent import sarsa_agent
+from function_approximation.agents.semigradient_q_agent import semigradient_q_agent
+from function_approximation.agents.semigradient_sarsa_agent import semigradient_sarsa_agent
+from policy_gradients.agents.actor_critic_agent import actor_critic_agent
 from gym import wrappers
 import math
 from matplotlib import pyplot as plt

@@ -2,11 +2,11 @@ import gym
 import numpy as np
 import math
 from collections import defaultdict
-from queue import LifoQueue
 
 class sarsa_agent():
 	"""
-	Creates a learning agent using the SARSA algorithm
+	Creates a learning agent using the SARSA algorithm. Currently does not work for continuous
+	action spaces.
 	
 	Args:
 		action_space: list of available actions for the agent
@@ -27,9 +27,13 @@ class sarsa_agent():
 		self.env = env
 
 		self.n_actions = env.action_space.n if (n_actions == None) else n_actions
-		self.obs_min = env.observation_space.low if (obs_min == None) else obs_min
-		self.obs_max = env.observation_space.high if (obs_max == None) else obs_max
-		self.num_bins = [10] * env.observation_space.n if (num_bins == None) else num_bins
+		self.discrete_obs_space = False
+		if type(env.observation_space) is gym.spaces.discrete.Discrete:
+			self.discrete_obs_space = True
+		else:
+			self.obs_min = env.observation_space.low if (obs_min == None) else obs_min
+			self.obs_max = env.observation_space.high if (obs_max == None) else obs_max
+			self.num_bins = [10] * len(env.observation_space.sample()) if (num_bins == None) else num_bins
 		
 		self.agent_params = {
 			"mean" : 0,
@@ -55,18 +59,20 @@ class sarsa_agent():
 			indices: tuple of indices for bins the observation corresponds to
 		"""
 		indices = []
-
-		for i in range(len(observation)):
-			if observation[i] <= self.obs_min[i]:
-				idx = 0
-			elif observation[i] >= self.obs_max[i]:
-				idx = self.num_bins[i] - 1
-			else:
-				offset = (self.num_bins[i]-1)*self.obs_min[i]/(self.obs_max[i] - self.obs_min[i])
-				scale = (self.num_bins[i]-1)/(self.obs_max[i] - self.obs_min[i]) 
-				idx = int(round(scale*observation[i] - offset))
-			indices.append(idx)
-		return tuple(indices)
+		if self.discrete_obs_space:
+			return observation
+		else:
+			for i in range(len(observation)):
+				if observation[i] <= self.obs_min[i]:
+					idx = 0
+				elif observation[i] >= self.obs_max[i]:
+					idx = self.num_bins[i] - 1
+				else:
+					offset = (self.num_bins[i]-1)*self.obs_min[i]/(self.obs_max[i] - self.obs_min[i])
+					scale = (self.num_bins[i]-1)/(self.obs_max[i] - self.obs_min[i]) 
+					idx = int(round(scale*observation[i] - offset))
+				indices.append(idx)
+			return tuple(indices)
 
 	def act(self, observation, epsilon):
 		"""

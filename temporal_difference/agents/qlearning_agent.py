@@ -5,7 +5,8 @@ from collections import defaultdict
 
 class qlearning_agent():
 	"""
-	Creates a learning agent using tabular Q-Learning
+	Creates a learning agent using tabular Q-Learning. Currently does not work for continuous action
+	spaces
 	
 	Args:
 		action_space: list of available actions for the agent
@@ -26,9 +27,14 @@ class qlearning_agent():
 		self.env = env
 
 		self.n_actions = env.action_space.n if (n_actions == None) else n_actions
-		self.obs_min = env.observation_space.low if (obs_min == None) else obs_min
-		self.obs_max = env.observation_space.high if (obs_max == None) else obs_max
-		self.num_bins = [10] * env.observation_space.n if (num_bins == None) else num_bins
+
+		self.discrete_obs_space = False
+		if type(env.observation_space) is gym.spaces.discrete.Discrete:
+			self.discrete_obs_space = True
+		else:
+			self.obs_min = env.observation_space.low if (obs_min == None) else obs_min
+			self.obs_max = env.observation_space.high if (obs_max == None) else obs_max
+			self.num_bins = [10] * len(env.observation_space.sample()) if (num_bins == None) else num_bins
 		
 		self.agent_params = {
 			"mean" : 0,
@@ -45,7 +51,7 @@ class qlearning_agent():
 
 	def discretize_state(self, observation):
 		"""
-		Converts true observation to binned observation
+		Converts true observation to binned observation if continuous
 		
 		Args:
 			observation: observation array returned from the environment
@@ -55,17 +61,20 @@ class qlearning_agent():
 		"""
 		indices = []
 
-		for i in range(len(observation)):
-			if observation[i] <= self.obs_min[i]:
-				idx = 0
-			elif observation[i] >= self.obs_max[i]:
-				idx = self.num_bins[i]- 1
-			else:
-				offset = (self.num_bins[i]-1)*self.obs_min[i]/(self.obs_max[i] - self.obs_min[i])
-				scale = (self.num_bins[i]-1)/(self.obs_max[i] - self.obs_min[i]) 
-				idx = int(round(scale*observation[i] - offset))
-			indices.append(idx)
-		return tuple(indices)
+		if self.discrete_obs_space:
+			return observation
+		else:
+			for i in range(len(observation)):
+				if observation[i] <= self.obs_min[i]:
+					idx = 0
+				elif observation[i] >= self.obs_max[i]:
+					idx = self.num_bins[i]- 1
+				else:
+					offset = (self.num_bins[i]-1)*self.obs_min[i]/(self.obs_max[i] - self.obs_min[i])
+					scale = (self.num_bins[i]-1)/(self.obs_max[i] - self.obs_min[i]) 
+					idx = int(round(scale*observation[i] - offset))
+				indices.append(idx)
+			return tuple(indices)
 
 	def act(self, observation, epsilon):
 		"""

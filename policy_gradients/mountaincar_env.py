@@ -12,10 +12,10 @@ Currently uses one-step tabular Q-Learning.
 """
 
 def main(episodes):
-	env = gym.make('MountainCar-v0')
-	env = wrappers.Monitor(env, '../tmp/mountaincar-experiment', force=True)
+	env = gym.make('LunarLander-v2')
+	# env = wrappers.Monitor(env, '../tmp/mountaincar-experiment', force=True)
 
-	agent = actor_critic_agent(env)
+	agent = actor_critic_agent(env, use_kernel=False)
 
 	rewards = agent.train(episodes)
 	print('Maximum reward obtained: ' + repr(max(rewards)))
@@ -23,5 +23,5 @@ def main(episodes):
 	env.close()
 
 if __name__ == "__main__":
-	episodes = 1000
+	episodes = 3000
 	main(episodes)
