@@ -7,6 +7,7 @@ from function_approximation.agents.semigradient_q_agent import semigradient_q_ag
 from function_approximation.agents.semigradient_sarsa_agent import semigradient_sarsa_agent
 from policy_gradients.agents.actor_critic_agent import actor_critic_agent
 from gym import wrappers
+import pandas as pd
 import math
 from matplotlib import pyplot as plt
 
@@ -44,7 +45,9 @@ def main():
 
 	rewards = agent.train(int(episodes))
 	print('Maximum reward obtained: ' + repr(max(rewards)))
-	print('Average reward obtained over last 100 episodes: ' + repr(np.mean(rewards[(int(episodes)-100):])))
+	reward_frame = pd.DataFrame(rewards)
+	rolling_maxes = reward_frame.rolling(window=100, center=False).mean()
+	print('Best reward obtained over 100 episodes: ' + repr(np.array(np.max(rolling_maxes))[0]))
 	env.close()
 
 if __name__ == "__main__":

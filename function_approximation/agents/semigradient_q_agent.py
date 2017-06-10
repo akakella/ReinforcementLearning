@@ -85,7 +85,7 @@ class semigradient_q_agent():
 		features = self.map_to_features(state)
 		values = []
 		for m in self.models:
-			values.append(m.predict([features])[0])
+			values.append(m.predict(features.reshape(1,-1))[0])
 
 		return values
 

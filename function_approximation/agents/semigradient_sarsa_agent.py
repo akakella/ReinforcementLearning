@@ -69,7 +69,7 @@ class semigradient_sarsa_agent():
 			features = self.featurizer.transform(detrended_state.reshape(1,-1))
 			return features[0]
 		else:
-			return state
+			return np.array(state)
 
 	def get_value(self, state):
 		"""
@@ -84,7 +84,7 @@ class semigradient_sarsa_agent():
 		features = self.map_to_features(state)
 		values = []
 		for m in self.models:
-			values.append(m.predict([features])[0])
+			values.append(m.predict(features.reshape(1,-1))[0])
 
 		return values
 
