@@ -3,6 +3,9 @@ import numpy as np
 import random
 import math
 import tensorflow as tf
+from keras.models import Sequential
+from keras.layers import *
+from keras.optimizers import *
 
 class estimator():
     """
@@ -16,37 +19,21 @@ class estimator():
     def __init__(self, env, scope, layers):
         self.scope = scope
         with tf.variable_scope(scope):
-            self.state = tf.placeholder(shape=[None, np.size(env.observation_space.sample())], dtype=tf.float32)
-            self.reward_target = tf.placeholder(shape=[None, np.size(env.action_space.sample())], dtype=tf.float32)
+            self.state_dim = env.observation_space.shape[0]
+            self.n_actions = env.action_space.n
 
-            input_layer = tf.contrib.layers.fully_connected(inputs=tf.expand_dims(self.state, 0),
-                                                            num_outputs = layers[1],
-                                                            activation_fn = tf.nn.relu,
-                                                            weights_initializer=tf.zeros_initializer)
+            self.model = Sequential()
+            self.model.add(Dense(units=layers[1], activation='relu', input_dim=self.state_dim))
+
             hidden_layer = []
-            layer = tf.contrib.layers.fully_connected(inputs = input_layer,
-                                                               num_outputs = layers[1],
-                                                               activation_fn = tf.nn.relu,
-                                                               weights_initializer=tf.zeros_initializer)
-            hidden_layer.append(layer)
             for k in range(layers[0]):
-                layer = tf.contrib.layers.fully_connected(inputs = hidden_layer[k],
-                                                                     num_outputs = layers[1],
-                                                                     activation_fn = tf.nn.relu,
-                                                                     weights_initializer=tf.zeros_initializer)
-                hidden_layer.append(layer)
+                self.model.add(Dense(units=layers[1], activation='relu'))
 
-            value_output_layer = tf.contrib.layers.fully_connected(inputs=hidden_layer[layers[0]],
-                                                                   num_outputs = env.action_space.n,
-                                                                   activation_fn = None,
-                                                                   weights_initializer=tf.zeros_initializer)
+            self.model.add(Dense(units=self.n_actions, activation='linear'))
+            train_opt = RMSprop(lr=0.00025)
+            self.model.compile(loss='mean_squared_error', optimizer=train_opt)
 
-            self.value_estimate = tf.squeeze(value_output_layer)
-            self.loss = tf.squared_difference(self.value_estimate, self.reward_target)
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-            self.train_opt = self.optimizer.minimize(self.loss)
-
-    def predict(self, sess, state):
+    def predict(self, state, batch=False):
         """
         Predict the values for a given state
 
@@ -57,10 +44,14 @@ class estimator():
             q_values: array of values for each action
 
         """
-        q_values = sess.run(self.value_estimate, {self.state: state})
+        if batch:
+            q_values = self.model.predict(state)
+        else:
+            q_values = self.model.predict(state.reshape(1, self.state_dim)).flatten()
+        
         return q_values
 
-    def update(self, sess, state, reward_target):
+    def update(self, state, reward_target):
         """
         Updates the model with the latest batch of state/reward pairs
 
@@ -68,11 +59,26 @@ class estimator():
             state: batch of states
             reward_target: batch of reward targets corresponding to states
 
-        Returns:
-            loss: loss for update setp
         """
-        _, loss = sess.run([self.train_opt, self.loss], {self.state: state, self.reward_target: reward_target})
-        return loss
+        self.model.fit(state, reward_target, epochs=1, verbose=0)
+        
+    def set_weights(self, weights):
+        """
+        Transfers weights from given estimator to current model
+        
+        Args:
+            weights: weights to apply to new model
+        """
+        self.model.set_weights(weights)
+        
+    def get_weights(self):
+        """
+        Get the weights from model inside this estimator
+        
+        Returns:
+            weights: weights from this model
+        """
+        return self.model.get_weights()
 
 
 class dqn_agent():
@@ -90,7 +96,7 @@ class dqn_agent():
 
     """
 
-    def __init__(self, env, layers=[10,100], batch_size = 128, replay_memory_size=100000, **agent_params):
+    def __init__(self, env, layers=[0,64], batch_size = 64, replay_memory_size=100000, **agent_params):
         self.env = env
         
         self.estimator = estimator(env, "estimator", layers)
@@ -98,8 +104,8 @@ class dqn_agent():
         self.target_update_frequency = 1000
 
         self.agent_params = {
-            "epsilon_min": 0.001,
-            "decay_rate": 0.02,
+            "epsilon_min": 0.01,
+            "decay_rate": 0.04,
             "discount": 0.99,
             "iter": 200,
         }
@@ -110,7 +116,7 @@ class dqn_agent():
         self.replay_memory_size = replay_memory_size
 
 
-    def act(self, sess, state, epsilon):
+    def act(self, state, epsilon):
         """
         Choose an action based on an epsilon-greedy policy and the Q-value estimator
 
@@ -123,40 +129,22 @@ class dqn_agent():
             action: action according to epsilon-greedy policy
         """
 
-        if (np.random.random() > epsilon):
-            action_values = self.estimator.predict(sess, state.reshape(1,-1))
+        if (random.random() > epsilon):
+            action_values = self.estimator.predict(state)
             action = np.argmax(action_values)
         else:
             action = self.env.action_space.sample()
-
         return action
 
 
-    def update_target_estimator(self, sess):
+    def update_target_estimator(self):
         """
         Update the target estimator's weights with those from the true estimator
         
         Args:
             sess: current tensorflow session
         """
-
-        estimator_params = []
-        target_params = []
-        for v in tf.trainable_variables():
-            if (v.name.startswith(self.estimator.scope)):
-                estimator_params.append(v)
-            elif (v.name.startswith(self.target_estimator.scope)):
-                target_params.append(v)
-
-        target_params = sorted(target_params, key = lambda x: x.name)
-        estimator_params = sorted(estimator_params, key = lambda x: x.name)
-
-        updates = []
-        for tvar, evar in zip(target_params, estimator_params):
-            assignment = tvar.assign(evar)
-            updates.append(assignment)
-
-        sess.run(updates)
+        self.target_estimator.set_weights(self.estimator.get_weights())
 
 
     def init_replay_memory(self):
@@ -169,10 +157,14 @@ class dqn_agent():
             action = self.env.action_space.sample()
 
             next_state, reward, done, _ = self.env.step(action)
+
+            if done:
+                next_state = None
+
             self.update_replay_memory((state, action, reward, next_state))
 
             if done:
-                state = env.reset()
+                state = self.env.reset()
             else:
                 state = next_state
 
@@ -184,17 +176,44 @@ class dqn_agent():
             transition: latest transition from the agent
         """
 
-        if len(self.replay_memory) > self.replay_memory_size:
+        if len(self.replay_memory) >= self.replay_memory_size:
             self.replay_memory.pop(0)
 
         self.replay_memory.append(transition)
 
+    def batch_update(self):
+        """
+        Randomly sample from replay memory and update network.
+        
+        """
+        samples = random.sample(self.replay_memory, self.batch_size)
+        batch_states = np.zeros((self.batch_size, np.size(self.env.observation_space.sample())))
+        batch_rewards = np.zeros((self.batch_size, self.env.action_space.n))
+
+        # For "None" states, replace them with arbitrary states to allow for batch prediction
+        estimated_values = self.target_estimator.predict(np.array([(self.env.observation_space.sample() if t[3] is None else t[3]) for t in samples]), batch=True)
+        reward_targets = self.estimator.predict(np.array([t[0] for t in samples]), batch=True)
+        for t_idx, transitions in enumerate(samples):
+            batch_states[t_idx] = transitions[0]
+            reward_target = reward_targets[t_idx]
+
+            if transitions[3] is not None:
+                reward_target[transitions[1]] = transitions[2] + self.agent_params["discount"]*np.max(estimated_values[t_idx])
+            else:
+                reward_target[transitions[1]] = transitions[2]
+
+            batch_rewards[t_idx] = reward_target
+
+        self.estimator.update(batch_states, batch_rewards)
+
     def train(self, episodes):
         """
-        Trains DQN
+        Trains agent for a number of episodes.
+
+        Args:
+            episodes: number of episodes to train over
         """
-        sess = tf.Session()
-        sess.run(tf.global_variables_initializer())
+
         if not self.replay_memory:
             self.init_replay_memory()
 
@@ -203,29 +222,22 @@ class dqn_agent():
         for ep in range(episodes):
             state = self.env.reset()
             epReward = 0
-            epsilon = max(self.agent_params["epsilon_min"], min(1, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
+            epsilon = 0.01 + (1 - 0.01) * math.exp(-0.001 * timestep)
 
-            for t in range(500):
-                action = self.act(sess, state, epsilon)
+            while True:
+                action = self.act(state, epsilon)
 
                 next_state, reward, done, _ = self.env.step(action)
 
+                if done:
+                    next_state = None
+
                 self.update_replay_memory((state, action, reward, next_state))
-
-                ### Form batch states and targets
-                samples = random.sample(self.replay_memory, self.batch_size)
-                batch_states = np.zeros((self.batch_size, 4))
-                batch_rewards = np.zeros((self.batch_size, 1))
-                for t_idx, transitions in enumerate(samples):
-                    batch_states[t_idx] = transitions[0]
-                    reward_target = self.estimator.predict(sess, transitions[0].reshape(1,-1))
-                    reward_target[transitions[1]] = transitions[2] + self.agent_params["discount"]*np.max(self.target_estimator.predict(sess, transitions[3].reshape(1,-1)))
-                    batch_rewards[t_idx] = reward_target
-
-                self.estimator.update(sess, batch_states, batch_rewards.reshape(-1,1))
+                
+                self.batch_update()
 
                 if (timestep % self.target_update_frequency) == 0:
-                    self.update_target_estimator(sess)
+                    self.update_target_estimator()
 
                 epReward += reward
                 state = next_state
