@@ -8,6 +8,7 @@ __pycache__/
 
 # gym files
 tmp/
+*.h5
 
 # Distribution / packaging
 .Python
