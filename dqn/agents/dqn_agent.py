@@ -14,23 +14,23 @@ class estimator():
     Args:
         scope: scope to assign to network parameters
         layers: contains number of layers and number of hidden units
+        learning_rate: learning rate for optimizer
     """
 
-    def __init__(self, env, scope, layers):
+    def __init__(self, env, scope, layers, learning_rate):
         self.scope = scope
         with tf.variable_scope(scope):
-            self.state_dim = env.observation_space.shape[0]
+            self.state_dim = np.size(env.observation_space.sample())
             self.n_actions = env.action_space.n
 
             self.model = Sequential()
-            self.model.add(Dense(units=layers[1], activation='relu', input_dim=self.state_dim))
+            self.model.add(Dense(units=layers[0], activation='relu', input_dim=self.state_dim))
 
-            hidden_layer = []
-            for k in range(layers[0]):
-                self.model.add(Dense(units=layers[1], activation='relu'))
+            for k in range(len(layers)-1):
+                self.model.add(Dense(units=layers[k+1], activation='relu'))
 
             self.model.add(Dense(units=self.n_actions, activation='linear'))
-            train_opt = RMSprop(lr=0.00025)
+            train_opt = Adam(lr=learning_rate)
             self.model.compile(loss='mean_squared_error', optimizer=train_opt)
 
     def predict(self, state, batch=False):
@@ -42,11 +42,11 @@ class estimator():
 
         Return:
             q_values: array of values for each action
-
         """
         if batch:
             q_values = self.model.predict(state)
         else:
+            state = np.array(state)
             q_values = self.model.predict(state.reshape(1, self.state_dim)).flatten()
         
         return q_values
@@ -58,7 +58,6 @@ class estimator():
         Args:
             state: batch of states
             reward_target: batch of reward targets corresponding to states
-
         """
         self.model.fit(state, reward_target, epochs=1, verbose=0)
         
@@ -92,22 +91,20 @@ class dqn_agent():
             epsilon_min: minimum allowed epsilon
             decay_rate: decay rate for logarithmic decay of epsilon
             discount: discount rate for future rewards
-            iter: maximum number of iterations per episode
-
     """
 
-    def __init__(self, env, layers=[0,64], batch_size = 64, replay_memory_size=100000, **agent_params):
+    def __init__(self, env, layers=[64,64], batch_size=64, replay_memory_size=100000, 
+                    learning_rate=0.00025, target_update_frequency=1000, **agent_params):
         self.env = env
         
-        self.estimator = estimator(env, "estimator", layers)
-        self.target_estimator = estimator(env, "target", layers)
-        self.target_update_frequency = 1000
+        self.estimator = estimator(env, "estimator", layers, learning_rate)
+        self.target_estimator = estimator(env, "target", layers, learning_rate)
+        self.target_update_frequency=target_update_frequency
 
         self.agent_params = {
             "epsilon_min": 0.01,
             "decay_rate": 0.04,
             "discount": 0.99,
-            "iter": 200,
         }
         self.agent_params.update(agent_params)
         self.replay_memory = []
@@ -128,7 +125,6 @@ class dqn_agent():
         Returns:
             action: action according to epsilon-greedy policy
         """
-
         if (random.random() > epsilon):
             action_values = self.estimator.predict(state)
             action = np.argmax(action_values)
@@ -151,9 +147,8 @@ class dqn_agent():
         """ 
         Initialize the replay memory with random (S,A,R,S') transitions
         """
-
         state = self.env.reset()
-        for m in range(self.replay_memory_size):
+        while True:
             action = self.env.action_space.sample()
 
             next_state, reward, done, _ = self.env.step(action)
@@ -163,7 +158,9 @@ class dqn_agent():
 
             self.update_replay_memory((state, action, reward, next_state))
 
-            if done:
+            if done and len(self.replay_memory) == self.replay_memory_size:
+                break
+            elif done:
                 state = self.env.reset()
             else:
                 state = next_state
@@ -175,7 +172,6 @@ class dqn_agent():
         Args:
             transition: latest transition from the agent
         """
-
         if len(self.replay_memory) >= self.replay_memory_size:
             self.replay_memory.pop(0)
 
@@ -183,8 +179,7 @@ class dqn_agent():
 
     def batch_update(self):
         """
-        Randomly sample from replay memory and update network.
-        
+        Randomly sample from replay memory and update network.        
         """
         samples = random.sample(self.replay_memory, self.batch_size)
         batch_states = np.zeros((self.batch_size, np.size(self.env.observation_space.sample())))
@@ -213,7 +208,6 @@ class dqn_agent():
         Args:
             episodes: number of episodes to train over
         """
-
         if not self.replay_memory:
             self.init_replay_memory()
 
@@ -222,7 +216,7 @@ class dqn_agent():
         for ep in range(episodes):
             state = self.env.reset()
             epReward = 0
-            epsilon = 0.01 + (1 - 0.01) * math.exp(-0.001 * timestep)
+            epsilon = max(self.agent_params["epsilon_min"], min(1, 1.0 - math.log10((ep + 1)*self.agent_params["decay_rate"])))
 
             while True:
                 action = self.act(state, epsilon)
@@ -242,6 +236,10 @@ class dqn_agent():
                 epReward += reward
                 state = next_state
                 timestep += 1
+
+                if (ep % 100 == 0):
+                    self.estimator.model.save('dqn_agent.h5') 
+
                 if done:
                     rewards.append(epReward)
                     break

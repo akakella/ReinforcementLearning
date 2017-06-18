@@ -5,9 +5,8 @@ import math
 import numpy as np
 
 """
-Trains the cartpole-v0 environment from OpenAI's gym for a predefined number of episodes
+Trains the CartPole-v0 environment from OpenAI's gym for a predefined number of episodes
 
-Currently uses one-step tabular Q-Learning.
 """
 
 def main(episodes):
